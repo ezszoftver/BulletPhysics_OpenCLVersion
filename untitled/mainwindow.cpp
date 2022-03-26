@@ -24,6 +24,15 @@ bool MainWindow::Init(QSplashScreen &splash)
     splash.update();
     alutInit(&__argc, __argv);
 
+    // play wav
+    ALuint buffer;
+    buffer = alutCreateBufferFromFile("Music.wav");
+    ALuint source;
+    alGenSources(1, &source);
+    alSourcei(source, AL_BUFFER, buffer);
+    alSourcei(source, AL_LOOPING, true);
+    alSourcePlay(source);
+
     splash.showMessage("Initialize OpenGL...", nAlignment);
     splash.update();
     if (false == InitGL(ui->glWidget))
@@ -61,6 +70,7 @@ bool MainWindow::Init(QSplashScreen &splash)
     splash.update();
 
     showMaximized();
+    QApplication::setOverrideCursor(Qt::BlankCursor);
 
     m_elapsedTimer.start();
     m_nElapsedTime = m_nCurrentTime = m_elapsedTimer.nsecsElapsed();
@@ -75,6 +85,8 @@ MainWindow::~MainWindow()
 {
     m_Timer.stop();
     disconnect(&m_Timer, SIGNAL(timeout()), this, SLOT(TimerTick()));
+
+    QApplication::setOverrideCursor(Qt::ArrowCursor);
 
     m_SkyBox.Release();
     for(int i = 0; i < m_modelGround.count(); i++)
@@ -263,7 +275,7 @@ bool MainWindow::InitPhysics()
 
     m_config.m_maxConvexBodies = 10000;
     m_config.m_maxConvexShapes = m_config.m_maxConvexBodies;
-    int maxPairsPerBody = 16;
+    int maxPairsPerBody = 8;
     m_config.m_maxBroadphasePairs = maxPairsPerBody * m_config.m_maxConvexBodies;
     m_config.m_maxContactCapacity = m_config.m_maxBroadphasePairs;
 
@@ -345,6 +357,10 @@ void MainWindow::TimerTick()
     m_rigidBodyPipeline->stepSimulation(dt);
     m_np->readbackAllBodiesToCpu();
 
+    // mouse rotate
+    QPoint pointDiff = cursor().pos() - QPoint(width() / 2, height() / 2);
+    cursor().setPos(QPoint(width() / 2, height() / 2));
+    m_Camera.Rotate(pointDiff.x(), pointDiff.y());
     m_Camera.Update(dt);
     glm::vec3 v3CameraPos = m_Camera.GetPos();
     glm::vec3 v3CameraAt = m_Camera.GetAt();
@@ -531,10 +547,6 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 
 void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
-    if (true == m_bMouseButtonDown)
-    {
-        m_Camera.Rotate(event->pos().x(), event->pos().y());
-    }
 }
 
 void MainWindow::CreateShadowMapFramebuffer()

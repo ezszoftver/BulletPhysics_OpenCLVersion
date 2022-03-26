@@ -38,22 +38,23 @@ public:
 	}
 	
 
-	void Rotate(int nCurrentMouseX, int nCurrentMouseY) 
+    void Rotate(int diffX, int diffY)
 	{
-		static int nElapsedMouseX = nCurrentMouseX;
-		static int nElapsedMouseY = nCurrentMouseY;
-		int diffX = nCurrentMouseX - nElapsedMouseX;
-		int diffY = nCurrentMouseY - nElapsedMouseY;
-		nElapsedMouseX = nCurrentMouseX;
-		nElapsedMouseY = nCurrentMouseY;
+        //static int nElapsedMouseX = nCurrentMouseX;
+        //static int nElapsedMouseY = nCurrentMouseY;
+        //int diffX = nCurrentMouseX - nElapsedMouseX;
+        //int diffY = nCurrentMouseY - nElapsedMouseY;
+        //nElapsedMouseX = nCurrentMouseX;
+        //nElapsedMouseY = nCurrentMouseY;
 
-		if (diffX < -20) { diffX = -20; }
-		if (diffY < -20) { diffY = -20; }
-		if (diffX > 20) { diffX = 20; }
-		if (diffY > 20) { diffY = 20; }
+        //if (diffX < -20) { diffX = -20; }
+        //if (diffY < -20) { diffY = -20; }
+        //if (diffX > 20) { diffX = 20; }
+        //if (diffY > 20) { diffY = 20; }
 
 		// rotate X
 		glm::vec3 axisX = glm::cross(this->dir, up);
+        axisX = glm::normalize(axisX);
 		glm::mat4 T1 = glm::rotate(glm::mat4(1), (float)-diffY * fRotateSpeed, axisX);
 
 		// rotateY
@@ -61,8 +62,15 @@ public:
 		glm::mat4 T2 = glm::rotate(glm::mat4(1), (float)-diffX * fRotateSpeed, axisY);
 
 		// apply
-		dir = glm::vec3( (T2 * T1) * glm::vec4(dir, 0) );
-		dir = glm::normalize(dir);
+        glm::vec3 dir2 = glm::vec3( (T2 * T1) * glm::vec4(dir, 0) );
+        dir2 = glm::normalize(dir2);
+
+        glm::vec3 axisX2 = glm::cross(dir2, up);
+        axisX2 = glm::normalize(axisX2);
+        if (glm::distance(axisX, axisX2) < 1.0f)
+        {
+            dir = dir2;
+        }
 	}
 
 	glm::vec3 GetPos() 
