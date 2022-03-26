@@ -1,0 +1,28 @@
+#version 330 core
+
+layout (location = 0) in vec3 inPosition;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec2 inTexcoord;
+
+uniform mat4 matCameraWorld;
+uniform mat4 matCameraView;
+uniform mat4 matCameraProj;
+
+uniform mat4 matLightWorld;
+uniform mat4 matLightView;
+uniform mat4 matLightProj;
+
+out vec3 Position;
+out vec3 Normal;
+out vec2 Texcoord;
+out vec4 Depth;
+
+void main()
+{
+	gl_Position = (matCameraProj * matCameraView * matCameraWorld) * vec4(inPosition, 1.0);
+	
+	Position = (matCameraWorld * vec4(inPosition, 1.0)).xyz;
+	Normal   = (matCameraWorld * vec4(inNormal  , 0.0)).xyz;
+	Texcoord = inTexcoord;
+	Depth    = (matLightProj * matLightView * matLightWorld) * vec4(inPosition, 1.0);
+}

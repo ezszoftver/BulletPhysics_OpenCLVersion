@@ -1,0 +1,22 @@
+#version 330 core
+
+layout (location = 0) out vec4 outDepth;
+
+uniform sampler2D g_Texture;
+
+in vec2 Texcoord;
+in vec2 Depth;
+
+void main()
+{
+	vec4 textureColor = texture2D(g_Texture, Texcoord);
+	
+	// alpha
+	if (textureColor.a < 0.5f)
+	{
+		discard;
+	}
+
+	float depth = ((Depth.x / Depth.y) * 0.5f) + 0.5f; // [-1 .. 1] to [0 .. 1]
+	outDepth = vec4(depth, depth, depth, 1.0f);
+}

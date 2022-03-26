@@ -1,0 +1,21 @@
+#version 330 core
+
+layout (location = 0) in vec3 inPosition;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec2 inTexcoord;
+
+uniform mat4 matWorld;
+uniform mat4 matView;
+uniform mat4 matProj;
+
+out vec2 Texcoord;
+out vec2 Depth;
+
+void main()
+{
+	mat4 matWVP = matProj * matView * matWorld;
+	gl_Position = matWVP * vec4(inPosition, 1.0);
+	
+	Texcoord = inTexcoord;
+	Depth = ( matWVP * vec4(inPosition, 1.0) ).zw;
+}
