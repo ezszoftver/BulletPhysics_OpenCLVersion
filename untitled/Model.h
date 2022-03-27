@@ -9,6 +9,9 @@
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
 
+#include "Texture.h"
+#include "Shader.h"
+
 typedef struct _Vertex
 {
     glm::vec3 v3Position;
@@ -19,10 +22,9 @@ Vertex;
 
 typedef struct _Material
 {
-    int m_nNumVertices = 0;
     std::vector< Vertex > m_listVertices;
 
-    GLuint m_glTextureId = 0;
+    Texture *m_pTexture = nullptr;
 
     std::vector< uint32_t > m_listIndices;
     GLuint m_glIndexBuffer = 0;
@@ -35,18 +37,24 @@ public:
     explicit Model();
     ~Model();
 
-    void LoadFromOBJFile(std::string strDir, std::string strFilename, glm::vec3 v3Translate = glm::vec3(0,0,0));
-    void Draw(GLuint program);
+    void Load(std::string strDir, std::string strFilename, glm::mat4 matTransform = glm::mat4(1.0f), bool bIsLoadTextures = true);
     void Release();
+
+    void Begin(Shader* shader);
+    void Draw(Shader* shader);
+    void End(Shader* shader);
 
     void CreateOpenGLBuffers();
     std::vector< Vertex >* GetVertices();
+    std::vector< Material >* GetMaterials();
 
 private:
     std::vector< Material > m_listMaterials;
 
     GLuint m_glVertexBuffer = 0;
     std::vector< Vertex > m_listAllVertices;
+
+    bool m_bIsLoadTextures;
 };
 
 #endif // MODEL_H

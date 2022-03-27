@@ -10,6 +10,7 @@
 #include "Model.h"
 #include "Camera.h"
 #include "SkyBox.h"
+#include "RenderTarget.h"
 
 #include "Bullet3OpenCL/Initialize/b3OpenCLUtils.h"
 #include "Bullet3OpenCL/RigidBody/b3GpuRigidBodyPipeline.h"
@@ -57,7 +58,6 @@ private:
 
     // opengl
     bool InitGL(QWidget *pWidget);
-    void CreateShadowMapFramebuffer();
 
     // physics
     bool InitPhysics();
@@ -77,13 +77,16 @@ private:
     // SkyBox
     SkyBox m_SkyBox;
 
-    // .OBJ file
-    QList<Model*> m_modelGround;
-    QList<Model*> m_modelDestructiveObjects;
+    // Model
+    Model m_modelDraw;
+    Model m_modelPhysics;
 
     // shader
-    GLuint m_programDraw;
-    GLuint m_programDrawToDepthTexture;
+    Shader m_shaderDraw;
+    Shader m_shaderShadowMap;
+
+    // RenderTarget
+    RenderTarget m_RenderToShadowTexture;
 
     // avatar
     int m_rigidbodyGroundId;
@@ -103,12 +106,8 @@ private:
     int nFPS = 0;
     float fSec = 0;
 
-    // ShadowMapping FrameBuffer
-    GLuint framebuffer = 0;
-    GLuint depthBuffer = 0;
+    int nShadowWidth = 2048;
 
-    int nShadowWidth = 0;
-    GLuint depthTexture = 0;
 
     // bullet physics
     cl_platform_id m_platformId;

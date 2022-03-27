@@ -4,8 +4,6 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
-#include "texture.h"
-
 Model::Model()
 {
 
@@ -16,22 +14,27 @@ Model::~Model()
     Release();
 }
 
-void Model::LoadFromOBJFile(std::string strDir, std::string strFilename, glm::vec3 v3Translate)
+void Model::Load(std::string strDir, std::string strFilename, glm::mat4 matTransform, bool bIsLoadTextures)
 {
     Assimp::Importer importer;
     const aiScene *pScene = importer.ReadFile((strDir + "/" + strFilename), aiProcessPreset_TargetRealtime_MaxQuality);
 
+    m_bIsLoadTextures = bIsLoadTextures;
     for (unsigned int m = 0; m < pScene->mNumMaterials; m++)
     {
         Material material;
 
-        if (pScene->mMaterials[m]->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+        if (true == bIsLoadTextures)
         {
-            aiString path;
-            pScene->mMaterials[m]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
-            std::string strTextureFilename(path.C_Str());
+            if (pScene->mMaterials[m]->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+            {
+                aiString path;
+                pScene->mMaterials[m]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
+                std::string strTextureFilename(path.C_Str());
 
-            material.m_glTextureId = Texture::GetInstance()->LoadTextureFromFile(strDir + "/" + strTextureFilename);
+                material.m_pTexture = new Texture();
+                material.m_pTexture->Load(strDir + "/" + strTextureFilename);
+            }
         }
 
         m_listMaterials.push_back(material);
@@ -54,8 +57,9 @@ void Model::LoadFromOBJFile(std::string strDir, std::string strFilename, glm::ve
                 aiVector3D t = pMesh->mTextureCoords[0][ face.mIndices[i] ];
 
                 Vertex vertex;
-                vertex.v3Position = glm::vec3(v.x, v.y, v.z) + v3Translate;
-                vertex.v3Normal = glm::vec3(n.x, n.y, n.z);
+                vertex.v3Position = glm::vec3(matTransform * glm::vec4(v.x, v.y, v.z, 1.0f));
+                vertex.v3Normal = glm::vec3(matTransform * glm::vec4(n.x, n.y, n.z, 0.0f));
+                vertex.v3Normal = glm::normalize(vertex.v3Normal);
                 vertex.v2TextCoord = glm::vec2(t.x, t.y);
 
                 material.m_listVertices.push_back(vertex);
@@ -64,11 +68,11 @@ void Model::LoadFromOBJFile(std::string strDir, std::string strFilename, glm::ve
     }
 
     int id = 0;
-    for (int m = 0; m < m_listMaterials.size(); m++)
+    for (int m = 0; m < (int)m_listMaterials.size(); m++)
     {
         Material& material = m_listMaterials[m];
 
-        for (int i = 0; i < material.m_listVertices.size(); i++)
+        for (int i = 0; i < (int)material.m_listVertices.size(); i++)
         {
             Vertex vertex = material.m_listVertices[i];
             m_listAllVertices.push_back(vertex);
@@ -102,7 +106,7 @@ void Model::CreateOpenGLBuffers()
     }
 }
 
-void Model::Draw(GLuint program)
+void Model::Begin(Shader* shader)
 {
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -111,10 +115,13 @@ void Model::Draw(GLuint program)
     glEnableVertexAttribArray(2);
     glBindBuffer(GL_ARRAY_BUFFER, m_glVertexBuffer);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(sizeof(glm::vec3)) );
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(sizeof(glm::vec3) + sizeof(glm::vec3)) );
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(sizeof(glm::vec3)));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(sizeof(glm::vec3) + sizeof(glm::vec3)));
+}
 
-    for(int m = 0; m < m_listMaterials.size(); m++)
+void Model::Draw(Shader *shader)
+{
+    for(unsigned int m = 0; m < m_listMaterials.size(); m++)
     {
         Material &material = m_listMaterials[m];
 
@@ -123,22 +130,33 @@ void Model::Draw(GLuint program)
             continue;
         }
 
-        glUniform1i(glGetUniformLocation(program, "g_Texture"), 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, material.m_glTextureId);
+        if (true == m_bIsLoadTextures)
+        {
+            if (nullptr == material.m_pTexture)
+            {
+                continue;
+            }
+
+            shader->SetTexture("g_Texture", material.m_pTexture, 0);
+        }
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, material.m_glIndexBuffer);
         glDrawElements(GL_TRIANGLES, (int)material.m_listIndices.size(), GL_UNSIGNED_INT, nullptr);
     }
+}
+
+void Model::End(Shader* shader)
+{
+    shader->DisableTexture(0);
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(2);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
+
 
 void Model::Release()
 {
@@ -148,10 +166,11 @@ void Model::Release()
 
         material.m_listVertices.clear();
 
-        if (0 != material.m_glTextureId)
+        if (nullptr != material.m_pTexture)
         {
-            glDeleteTextures(1, &material.m_glTextureId);
-            material.m_glTextureId = 0;
+            material.m_pTexture->Release();
+            delete material.m_pTexture;
+            material.m_pTexture = nullptr;
         }
     }
 
@@ -162,4 +181,9 @@ void Model::Release()
 std::vector< Vertex >* Model::GetVertices()
 {
     return &m_listAllVertices;
+}
+
+std::vector< Material >* Model::GetMaterials()
+{
+    return &m_listMaterials;
 }

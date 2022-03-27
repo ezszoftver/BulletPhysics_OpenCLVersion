@@ -11,6 +11,7 @@ CONFIG += c++17
 SOURCES += \
     Camera.cpp \
     Model.cpp \
+    RenderTarget.cpp \
     SDKs/bullet3-3.22a/src/Bullet3Collision/BroadPhaseCollision/b3DynamicBvh.cpp \
     SDKs/bullet3-3.22a/src/Bullet3Collision/BroadPhaseCollision/b3DynamicBvhBroadphase.cpp \
     SDKs/bullet3-3.22a/src/Bullet3Collision/BroadPhaseCollision/b3OverlappingPairCache.cpp \
@@ -250,6 +251,7 @@ SOURCES += \
 HEADERS += \
     Camera.h \
     Model.h \
+    RenderTarget.h \
     SDKs/bullet3-3.22a/examples/CommonInterfaces/CommonFileIOInterface.h \
     SDKs/bullet3-3.22a/src/Bullet3Collision/BroadPhaseCollision/b3BroadphaseCallback.h \
     SDKs/bullet3-3.22a/src/Bullet3Collision/BroadPhaseCollision/b3DynamicBvh.h \
@@ -698,7 +700,7 @@ INCLUDEPATH += $$PWD/SDKs/bullet3-3.22a/src
 DEPENDPATH += $$PWD/SDKs/bullet3-3.22a/src
 DEFINES += BT_THREADSAFE=1 B3_USE_CLEW B3_USE_SSE BT_USE_SSE_IN_API
 
-win32: LIBS += -L$$PWD/SDKs/Assimp/lib/ -lassimp-vc140-mt
+win32: LIBS += -L$$PWD/SDKs/Assimp/lib/ -lassimp -lIrrXML -lzlib
 INCLUDEPATH += $$PWD/SDKs/Assimp/include
 DEPENDPATH += $$PWD/SDKs/Assimp/include
 

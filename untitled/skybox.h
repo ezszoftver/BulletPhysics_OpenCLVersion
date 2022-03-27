@@ -6,6 +6,8 @@
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
 
+#include "Texture.h"
+
 #include <QString>
 #include <QList>
 
@@ -19,7 +21,7 @@ public:
     void Release();
 
 private:
-    GLuint texture[6];
+    Texture texture[6];
     glm::vec3 vertices[36];
     glm::vec2 textures[36];
 };

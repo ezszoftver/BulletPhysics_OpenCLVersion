@@ -89,24 +89,6 @@ MainWindow::~MainWindow()
 
     ui->glWidget->setCursor(Qt::ArrowCursor);
 
-    m_SkyBox.Release();
-    for(int i = 0; i < m_modelGround.count(); i++)
-    {
-        Model *model = m_modelGround.at(i);
-        model->Release();
-        delete model;
-    }
-    for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
-    {
-        Model *model = m_modelDestructiveObjects.at(i);
-        model->Release();
-        delete model;
-    }
-    m_modelGround.clear();
-    m_modelDestructiveObjects.clear();
-    //m_modelGround.Release();
-    //m_modelDestructiveObjects.Release();
-
     ExitPhysics();
     delete ui;
 }
@@ -130,8 +112,8 @@ bool MainWindow::InitGL(QWidget *pWidget)
         0,                              // Shift Bit Ignored
         0,                              // No Accumulation Buffer
         0, 0, 0, 0,                         // Accumulation Bits Ignored
-        24,                             // Z-Buffer (Depth Buffer)
-        8,                              // Stencil Buffer
+        32,                             // Z-Buffer (Depth Buffer)
+        0,                              // Stencil Buffer
         0,                              // No Auxiliary Buffer
         PFD_MAIN_PLANE,                         // Main Drawing Layer
         0,                              // Reserved
@@ -164,38 +146,23 @@ bool MainWindow::InitScene()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     wglSwapIntervalEXT(0);
 
-    m_programDraw = Shader::Load("Shaders/Draw.vs.txt", "Shaders/Draw.fs.txt");
-    m_programDrawToDepthTexture = Shader::Load("Shaders/DrawToDepthTexture.vs.txt", "Shaders/DrawToDepthTexture.fs.txt");
-    CreateShadowMapFramebuffer();
+    m_shaderDraw.Load("Shaders/Draw.vs.txt", "Shaders/Draw.fs.txt");
+    m_shaderShadowMap.Load("Shaders/DrawToDepthTexture.vs.txt", "Shaders/DrawToDepthTexture.fs.txt");
+    std::vector<int> listTypes;
+    listTypes.push_back(GL_RGBA32F);
+    m_RenderToShadowTexture.Load(listTypes, nShadowWidth, nShadowWidth);
     m_SkyBox.Load("Scene/", "barren_bk.jpg", "barren_dn.jpg", "barren_ft.jpg", "barren_lf.jpg", "barren_rt.jpg", "barren_up.jpg");
 
-    for(int i = 0; i < 1; i++)
-    {
-        glm::vec3 v3Translate(i * 77.5f,0,0);
-
-        Model *modelGround = new Model();
-        modelGround->LoadFromOBJFile("Scene", "Ground.obj", v3Translate);
-        modelGround->CreateOpenGLBuffers();
-
-        Model *modelDestructiveObjects = new Model();
-        modelDestructiveObjects->LoadFromOBJFile("Scene", "DestructiveObjects.obj", v3Translate);
-        modelDestructiveObjects->CreateOpenGLBuffers();
-
-        CreateConcaveMesh(glm::vec3(0,0,0), glm::vec3(0,0,0), 0.0f, modelGround->GetVertices());
-        CreateConcaveMesh(glm::vec3(0,0,0), glm::vec3(0,0,0), 0.0f, modelDestructiveObjects->GetVertices());
-
-        m_modelGround.push_back(modelGround);
-        m_modelDestructiveObjects.push_back(modelDestructiveObjects);
-    }
-    //m_modelGround.LoadFromOBJFile("Scene", "Ground.obj");
-    //m_modelGround.CreateOpenGLBuffers();
-    //m_modelDestructiveObjects.LoadFromOBJFile("Scene", "DestructiveObjects.obj");
-    //m_modelDestructiveObjects.CreateOpenGLBuffers();
-    //CreateConcaveMesh(glm::vec3(0,0,0), glm::vec3(0,0,0), 0.0f, m_modelGround.GetVertices());
-    //CreateConcaveMesh(glm::vec3(0,0,0), glm::vec3(0,0,0), 0.0f, m_modelDestructiveObjects.GetVertices());
+    // Models
+    // 1/2 - draw
+    m_modelDraw.Load("Scene", "Scene.obj");
+    m_modelDraw.CreateOpenGLBuffers();
+    // 2/2 - physics
+    m_modelPhysics.Load("Scene", "Physics.obj", glm::mat4(1.0f), false);
+    CreateConcaveMesh(glm::vec3(0,0,0), glm::vec3(0,0,0), 0.0f, m_modelPhysics.GetVertices());
 
     Model avatar;
-    avatar.LoadFromOBJFile("Scene", "Avatar.obj");
+    avatar.Load("Scene", "Avatar.obj");
     m_rigidbodyAvatarId = CreateConvexMesh(glm::vec3(20,3,20), glm::vec3(0,0,0), 85.0f, avatar.GetVertices());
 
     m_rigidBodyPipeline->setGravity(b3MakeVector3(0, -9.81f, 0));
@@ -362,9 +329,9 @@ void MainWindow::TimerTick()
     glm::vec3 v3CameraDir = glm::normalize(v3CameraAt - v3CameraPos);
 
     // get avatar
-    b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();//getRigidBodyDataCpu();
+    b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();
     b3RigidBodyData *rigidbodyAvatar = &(pRigidBodies[m_rigidbodyAvatarId]);
-    rigidbodyAvatar->m_quat = b3Quat(0,0,0);
+    rigidbodyAvatar->m_quat = b3Quat(0,1,0,0);
     // restitution, friction
     rigidbodyAvatar->m_restituitionCoeff = 0.0f;
     rigidbodyAvatar->m_frictionCoeff = 2.0f;
@@ -413,40 +380,128 @@ void MainWindow::TimerTick()
     glm::mat4 mLightView = glm::lookAtRH(v3LightPos, v3LightAt, glm::vec3(0, 1, 0));
     glm::mat4 mLightProj = glm::orthoRH(-30.0f,30.0f, -30.0f,30.0f, 1.0f, 200.0f);
 
-    // Draw
-    // draw to shadow texture
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    GLenum arrDrawBuffers1[] = { GL_COLOR_ATTACHMENT0 };
-    glDrawBuffers(1, arrDrawBuffers1);
+    //// Draw
+    //// draw to shadow texture
+    //glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    //GLenum arrDrawBuffers1[] = { GL_COLOR_ATTACHMENT0 };
+    //glDrawBuffers(1, arrDrawBuffers1);
+
+    //glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    //glViewport(0, 0, nShadowWidth, nShadowWidth);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    //glUseProgram(m_programDrawToDepthTexture);
+
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matWorld"), 1, GL_FALSE, glm::value_ptr(mLightWorld));
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matView"), 1, GL_FALSE, glm::value_ptr(mLightView));
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matProj"), 1, GL_FALSE, glm::value_ptr(mLightProj));
+
+    //for(int i = 0; i < m_modelGround.count(); i++)
+    //{
+    //    m_modelGround.at(i)->Draw(m_programDrawToDepthTexture);
+    //}
+    //for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
+    //{
+    //    m_modelDestructiveObjects.at(i)->Draw(m_programDrawToDepthTexture);
+    //}
+    ////m_modelGround.Draw(m_programDrawToDepthTexture);
+    ////m_modelDestructiveObjects.Draw(m_programDrawToDepthTexture);
+
+    //glUseProgram(0);
+
+    //// draw to screen
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //glDrawBuffers(1, arrDrawBuffers1);
+
+    //glm::mat4 mCameraWorld = glm::mat4(1.0f);
+    //glm::mat4 mCameraView = glm::lookAtRH(v3CameraPos, v3CameraAt, glm::vec3(0, 1, 0));
+    //glm::mat4 mCameraProj = glm::perspectiveRH(glm::radians(45.0f), (float)nWidth / (float)nHeight, 0.1f, 1000.0f);
+
+    //glClearColor(0.5f, 0.5f, 1.0f, 1.0f);
+    //glViewport(0, 0, nWidth, nHeight);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    //glUseProgram(m_programDraw);
+
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraWorld"), 1, GL_FALSE, glm::value_ptr(mCameraWorld));
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraView"), 1, GL_FALSE, glm::value_ptr(mCameraView));
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraProj"), 1, GL_FALSE, glm::value_ptr(mCameraProj));
+
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightWorld"), 1, GL_FALSE, glm::value_ptr(mLightWorld));
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightView"), 1, GL_FALSE, glm::value_ptr(mLightView));
+    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightProj"), 1, GL_FALSE, glm::value_ptr(mLightProj));
+
+    //glUniform3fv(glGetUniformLocation(m_programDraw, "lightDir"), 1, glm::value_ptr(v3LightDir));
+
+    //glUniform1i(glGetUniformLocation(m_programDraw, "g_DepthTexture"), 1);
+    //glActiveTexture(GL_TEXTURE1);
+    //glBindTexture(GL_TEXTURE_2D, depthTexture);
+
+    //for(int i = 0; i < m_modelGround.count(); i++)
+    //{
+    //    m_modelGround.at(i)->Draw(m_programDrawToDepthTexture);
+    //}
+    //for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
+    //{
+    //    m_modelDestructiveObjects.at(i)->Draw(m_programDrawToDepthTexture);
+    //}
+    ////m_modelGround.Draw(m_programDraw);
+    ////m_modelDestructiveObjects.Draw(m_programDraw);
+
+
+    //glUseProgram(0);
+
+    //glMatrixMode(GL_PROJECTION);
+    //glLoadMatrixf(glm::value_ptr(mCameraProj));
+    //glMatrixMode(GL_MODELVIEW);
+    //glLoadMatrixf(glm::value_ptr(mCameraView * mCameraWorld));
+
+    //m_SkyBox.Draw(v3CameraPos, 300.0f);
+
+    //SwapBuffers(hDC);
+
+    // draw
+    // 1/2 - draw to shadow texture
+    m_RenderToShadowTexture.Bind();
 
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glViewport(0, 0, nShadowWidth, nShadowWidth);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glUseProgram(m_programDrawToDepthTexture);
+    m_shaderShadowMap.Begin();
+    glm::mat4 mWorld = glm::mat4(1.0f);
+    m_shaderShadowMap.SetMatrix("matWorld", &mWorld);
+    m_shaderShadowMap.SetMatrix("matView", &mLightView);
+    m_shaderShadowMap.SetMatrix("matProj", &mLightProj);
 
-    glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matWorld"), 1, GL_FALSE, glm::value_ptr(mLightWorld));
-    glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matView"), 1, GL_FALSE, glm::value_ptr(mLightView));
-    glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matProj"), 1, GL_FALSE, glm::value_ptr(mLightProj));
+    m_modelDraw.Begin(&m_shaderShadowMap);
+    m_modelDraw.Draw(&m_shaderShadowMap);
+    m_modelDraw.End(&m_shaderShadowMap);
 
-    for(int i = 0; i < m_modelGround.count(); i++)
-    {
-        m_modelGround.at(i)->Draw(m_programDrawToDepthTexture);
-    }
-    for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
-    {
-        m_modelDestructiveObjects.at(i)->Draw(m_programDrawToDepthTexture);
-    }
-    //m_modelGround.Draw(m_programDrawToDepthTexture);
-    //m_modelDestructiveObjects.Draw(m_programDrawToDepthTexture);
+    //m_modelBox.Begin(&m_shaderShadowMap);
+    //for(int i = 0; i < m_listRigidBodies.count(); i++)
+    //{
+    //    btRigidBody *body = m_listRigidBodies.at(i);
+    //
+    //    btTransform trans = body->getWorldTransform();
+    //    btQuaternion quat = trans.getRotation();
+    //    float fAngle = quat.getAngle();
+    //    btVector3 axis = quat.getAxis();
+    //    btVector3 tr = trans.getOrigin();
+    //
+    //    glm::mat4 mWorld = glm::translate(glm::vec3(tr.x(), tr.y(), tr.z()) ) * glm::rotate(fAngle, glm::vec3(axis.x(), axis.y(), axis.z()));
+    //
+    //    m_shaderShadowMap.SetMatrix("matWorld", &mWorld);
+    //
+    //    m_shaderShadowMap.SetTexture("g_Texture", m_listRigidBodiesTextureId.at(i), 0);
+    //    m_modelBox.Draw(&m_shaderShadowMap);
+    //}
+    //m_modelBox.End(&m_shaderShadowMap);
 
-    glUseProgram(0);
+    m_shaderShadowMap.End();
+    m_RenderToShadowTexture.Unbind();
 
-    // draw to screen
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDrawBuffers(1, arrDrawBuffers1);
-
-    glm::mat4 mCameraWorld = glm::mat4(1.0f);
+    // 2/2 - draw to screen with shadow
     glm::mat4 mCameraView = glm::lookAtRH(v3CameraPos, v3CameraAt, glm::vec3(0, 1, 0));
     glm::mat4 mCameraProj = glm::perspectiveRH(glm::radians(45.0f), (float)nWidth / (float)nHeight, 0.1f, 1000.0f);
 
@@ -454,40 +509,49 @@ void MainWindow::TimerTick()
     glViewport(0, 0, nWidth, nHeight);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glUseProgram(m_programDraw);
+    m_shaderDraw.Begin();
+    mWorld = glm::mat4(1.0f);
+    m_shaderDraw.SetMatrix("matWorld", &mWorld);
+    m_shaderDraw.SetMatrix("matView", &mCameraView);
+    m_shaderDraw.SetMatrix("matProj", &mCameraProj);
+    m_shaderDraw.SetMatrix("matLightView", &mLightView);
+    m_shaderDraw.SetMatrix("matLightProj", &mLightProj);
+    m_shaderDraw.SetVector3("lightDir", &v3LightDir);
+    m_shaderDraw.SetTexture("g_DepthTexture", m_RenderToShadowTexture.GetTextureID(0), 1);
 
-    glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraWorld"), 1, GL_FALSE, glm::value_ptr(mCameraWorld));
-    glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraView"), 1, GL_FALSE, glm::value_ptr(mCameraView));
-    glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraProj"), 1, GL_FALSE, glm::value_ptr(mCameraProj));
+    m_modelDraw.Begin(&m_shaderDraw);
+    m_modelDraw.Draw(&m_shaderDraw);
+    m_modelDraw.End(&m_shaderDraw);
 
-    glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightWorld"), 1, GL_FALSE, glm::value_ptr(mLightWorld));
-    glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightView"), 1, GL_FALSE, glm::value_ptr(mLightView));
-    glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightProj"), 1, GL_FALSE, glm::value_ptr(mLightProj));
+    //m_modelBox.Begin(&m_shaderDraw);
+    //for(int i = 0; i < m_listRigidBodies.count(); i++)
+    //{
+    //    btRigidBody *body = m_listRigidBodies.at(i);
+    //
+    //    btTransform trans = body->getWorldTransform();
+    //    btQuaternion quat = trans.getRotation();
+    //    float fAngle = quat.getAngle();
+    //    btVector3 axis = quat.getAxis();
+    //    btVector3 tr = trans.getOrigin();
+    //
+    //    glm::mat4 mWorld = glm::translate(glm::vec3(tr.x(), tr.y(), tr.z()) ) * glm::rotate(fAngle, glm::vec3(axis.x(), axis.y(), axis.z()));
+    //
+    //    m_shaderDraw.SetMatrix("matWorld", &mWorld);
+    //
+    //    m_shaderDraw.SetTexture("g_Texture", m_listRigidBodiesTextureId.at(i), 0);
+    //    m_modelBox.Draw(&m_shaderDraw);
+    //}
+    //m_modelBox.End(&m_shaderDraw);
 
-    glUniform3fv(glGetUniformLocation(m_programDraw, "lightDir"), 1, glm::value_ptr(v3LightDir));
+    m_shaderDraw.DisableTexture(1);
+    m_shaderDraw.End();
 
-    glUniform1i(glGetUniformLocation(m_programDraw, "g_DepthTexture"), 1);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, depthTexture);
-
-    for(int i = 0; i < m_modelGround.count(); i++)
-    {
-        m_modelGround.at(i)->Draw(m_programDrawToDepthTexture);
-    }
-    for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
-    {
-        m_modelDestructiveObjects.at(i)->Draw(m_programDrawToDepthTexture);
-    }
-    //m_modelGround.Draw(m_programDraw);
-    //m_modelDestructiveObjects.Draw(m_programDraw);
-
-
-    glUseProgram(0);
-
+    // sky
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(glm::value_ptr(mCameraProj));
     glMatrixMode(GL_MODELVIEW);
-    glLoadMatrixf(glm::value_ptr(mCameraView * mCameraWorld));
+    mWorld = glm::mat4(1.0f);
+    glLoadMatrixf(glm::value_ptr(mCameraView * mWorld));
 
     m_SkyBox.Draw(v3CameraPos, 300.0f);
 
@@ -545,48 +609,4 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 
 void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
-}
-
-void MainWindow::CreateShadowMapFramebuffer()
-{
-    nShadowWidth = 2048;
-
-    if (0 != framebuffer)
-    {
-        glDeleteFramebuffers(1, &framebuffer);
-        framebuffer = 0;
-    }
-
-    if (0 != depthBuffer)
-    {
-        glDeleteTextures(1, &depthBuffer);
-        depthBuffer = 0;
-    }
-
-    if (0 != depthTexture)
-    {
-        glDeleteTextures(1, &depthTexture);
-        depthTexture = 0;
-    }
-
-    glGenFramebuffers(1, &framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
-    glGenTextures(1, &depthTexture);
-    glBindTexture(GL_TEXTURE_2D, depthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, nShadowWidth, nShadowWidth, 0, GL_RGBA, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthTexture, 0);
-
-    glGenTextures(1, &depthBuffer);
-    glBindTexture(GL_TEXTURE_2D, depthBuffer);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, nShadowWidth, nShadowWidth, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthBuffer, 0);
 }
