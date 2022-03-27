@@ -174,13 +174,13 @@ bool MainWindow::InitScene(QSplashScreen &splash)
         textures[i] = texture.ID();
     }
 
-    int max = 5000;
+    int max = 2500;
     int curr = 0;
     for(int x = -5; x < 5; x++)
     {
         for(int z = -5; z < 5; z++)
         {
-            for(int y = 0; y < (1/*100db*/ * 50/*5000db*/); y++)
+            for(int y = 0; y < (1/*100db*/ * 25/*2500db*/); y++)
             {
                 float fScale = 1.5f;
                 int dynamic_id = CreateConvexMesh(glm::vec3(x * fScale, 20 + (y * fScale), z * fScale), glm::vec3(0,0,0), 10.0f, m_dynamicmodel.GetVertices());
@@ -264,11 +264,11 @@ bool MainWindow::InitPhysics()
         return false;
     }
 
-    //m_config.m_maxConvexBodies = 100;
-    //m_config.m_maxConvexShapes = m_config.m_maxConvexBodies;
-    //int maxPairsPerBody = 8;
-    //m_config.m_maxBroadphasePairs = maxPairsPerBody * m_config.m_maxConvexBodies;
-    //m_config.m_maxContactCapacity = m_config.m_maxBroadphasePairs;
+    m_config.m_maxConvexBodies = 100000;
+    m_config.m_maxConvexShapes = m_config.m_maxConvexBodies;
+    int maxPairsPerBody = 8;
+    m_config.m_maxBroadphasePairs = maxPairsPerBody * m_config.m_maxConvexBodies;
+    m_config.m_maxContactCapacity = m_config.m_maxBroadphasePairs;
 
     m_np = new b3GpuNarrowPhase(m_clContext, m_clDevice, m_clQueue, m_config);
     m_bp = new b3GpuSapBroadphase(m_clContext, m_clDevice, m_clQueue);
