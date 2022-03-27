@@ -67,7 +67,8 @@ private:
     int CreateConcaveMesh(glm::vec3 v3Position, glm::vec3 v3Rotate, float fMass, std::vector< Vertex > *pListVertices);
 
     // scene
-    bool InitScene();
+    bool InitScene(QSplashScreen &splash);
+    int nAlignment = Qt::AlignLeft | Qt::AlignBottom;
 
     // OpenGL
     HWND hWnd;
@@ -81,6 +82,15 @@ private:
     Model m_modelDraw;
     Model m_modelPhysics;
 
+    // Dynamic Barrel
+    Model m_dynamicmodel;
+    std::vector<int> m_listDynamicIds;
+    std::vector<int> m_listRigidBodiesTextureId;
+    // Barrel Textures
+    int numTextures = 6;
+    QString strFilenames[6] = { "diffus_black.tga", "diffus_blue.tga", "diffus_green.tga", "diffus_red.tga", "diffus_rust.tga", "diffus_yellow.tga" };
+    GLuint textures[6];
+
     // shader
     Shader m_shaderDraw;
     Shader m_shaderShadowMap;
@@ -90,7 +100,7 @@ private:
 
     // avatar
     int m_rigidbodyGroundId;
-    int m_rigidbodyAvatarId;
+    //int m_rigidbodyAvatarId;
 
     // SYSTEM
     QTimer m_Timer;

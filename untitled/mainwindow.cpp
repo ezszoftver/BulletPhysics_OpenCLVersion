@@ -17,8 +17,6 @@ MainWindow::MainWindow(QWidget *parent)
 
 bool MainWindow::Init(QSplashScreen &splash)
 {
-    int nAlignment = Qt::AlignLeft | Qt::AlignBottom;
-
     // openal
     splash.showMessage("Initialize OpenAL...", nAlignment);
     splash.update();
@@ -61,7 +59,7 @@ bool MainWindow::Init(QSplashScreen &splash)
 
     splash.showMessage("Loading Scene...", nAlignment);
     splash.update();
-    if (false == InitScene())
+    if (false == InitScene(splash))
     {
         return false;
     }
@@ -135,7 +133,7 @@ bool MainWindow::InitGL(QWidget *pWidget)
     return true;
 }
 
-bool MainWindow::InitScene()
+bool MainWindow::InitScene(QSplashScreen &splash)
 {
     wglMakeCurrent(hDC, hRC);
 
@@ -161,9 +159,43 @@ bool MainWindow::InitScene()
     m_modelPhysics.Load("Scene", "Physics.obj", glm::mat4(1.0f), false);
     CreateConcaveMesh(glm::vec3(0,0,0), glm::vec3(0,0,0), 0.0f, m_modelPhysics.GetVertices());
 
-    Model avatar;
-    avatar.Load("Scene", "Avatar.obj");
-    m_rigidbodyAvatarId = CreateConvexMesh(glm::vec3(20,3,20), glm::vec3(0,0,0), 85.0f, avatar.GetVertices());
+    //Model avatar;
+    //avatar.Load("Scene", "Avatar.obj");
+    //m_rigidbodyAvatarId = CreateConvexMesh(glm::vec3(20,3,20), glm::vec3(0,0,0), 85.0f, avatar.GetVertices());
+
+    m_dynamicmodel.Load("Scene", "barrel.obj", glm::scale(glm::vec3(0.015f, 0.015f, 0.015f)), false);
+    m_dynamicmodel.CreateOpenGLBuffers();
+    for (int i = 0; i < numTextures; i++)
+    {
+        QString strFilename = "Scene/" + strFilenames[i];
+
+        Texture texture;
+        texture.Load(strFilename.toStdString());
+        textures[i] = texture.ID();
+    }
+
+    int max = 5000;
+    int curr = 0;
+    for(int x = -5; x < 5; x++)
+    {
+        for(int z = -5; z < 5; z++)
+        {
+            for(int y = 0; y < (1/*100db*/ * 50/*5000db*/); y++)
+            {
+                float fScale = 1.5f;
+                int dynamic_id = CreateConvexMesh(glm::vec3(x * fScale, 20 + (y * fScale), z * fScale), glm::vec3(0,0,0), 10.0f, m_dynamicmodel.GetVertices());
+                m_listDynamicIds.push_back(dynamic_id);
+
+                int id = rand() % numTextures;
+                m_listRigidBodiesTextureId.push_back( textures[id] );
+
+                curr++;
+                std::string strMessage = "Loading Scene... (" + std::to_string(curr) + "/" + std::to_string(max) + ")";
+                splash.showMessage(strMessage.c_str(), nAlignment);
+                splash.update();
+            }
+        }
+    }
 
     m_rigidBodyPipeline->setGravity(b3MakeVector3(0, -9.81f, 0));
 
@@ -171,7 +203,7 @@ bool MainWindow::InitScene()
     m_np->writeAllBodiesToGpu();
     m_bp->writeAabbsToGpu();
 
-    m_Camera.Init(glm::vec3(0,8,20), glm::vec3(0,0,0));
+    m_Camera.Init(glm::vec3(20,3,20), glm::vec3(0,0,0));
 
     return true;
 }
@@ -232,11 +264,11 @@ bool MainWindow::InitPhysics()
         return false;
     }
 
-    m_config.m_maxConvexBodies = 10000;
-    m_config.m_maxConvexShapes = m_config.m_maxConvexBodies;
-    int maxPairsPerBody = 8;
-    m_config.m_maxBroadphasePairs = maxPairsPerBody * m_config.m_maxConvexBodies;
-    m_config.m_maxContactCapacity = m_config.m_maxBroadphasePairs;
+    //m_config.m_maxConvexBodies = 100;
+    //m_config.m_maxConvexShapes = m_config.m_maxConvexBodies;
+    //int maxPairsPerBody = 8;
+    //m_config.m_maxBroadphasePairs = maxPairsPerBody * m_config.m_maxConvexBodies;
+    //m_config.m_maxContactCapacity = m_config.m_maxBroadphasePairs;
 
     m_np = new b3GpuNarrowPhase(m_clContext, m_clDevice, m_clQueue, m_config);
     m_bp = new b3GpuSapBroadphase(m_clContext, m_clDevice, m_clQueue);
@@ -296,6 +328,9 @@ void MainWindow::TimerTick()
     m_nCurrentTime = m_elapsedTimer.nsecsElapsed();
     dt = (float)(m_nCurrentTime - m_nElapsedTime) / 1000000000.0f;
 
+    if (dt <= 0.0) { return; }
+    if (dt > (1.0f / 30.0f)){ dt = 1.0f / 30.0f; }
+
     // print fps
     nFPS++;
     fSec += dt;
@@ -314,6 +349,7 @@ void MainWindow::TimerTick()
 
     // physics
     m_rigidBodyPipeline->stepSimulation(dt);
+
     m_np->readbackAllBodiesToCpu();
 
     // mouse rotate
@@ -328,18 +364,16 @@ void MainWindow::TimerTick()
     glm::vec3 v3CameraAt = m_Camera.GetAt();
     glm::vec3 v3CameraDir = glm::normalize(v3CameraAt - v3CameraPos);
 
-    // get avatar
-    b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();
-    b3RigidBodyData *rigidbodyAvatar = &(pRigidBodies[m_rigidbodyAvatarId]);
-    rigidbodyAvatar->m_quat = b3Quat(0,1,0,0);
-    // restitution, friction
-    rigidbodyAvatar->m_restituitionCoeff = 0.0f;
-    rigidbodyAvatar->m_frictionCoeff = 2.0f;
 
-    m_Camera.SetPos(glm::vec3(rigidbodyAvatar->m_pos.x, rigidbodyAvatar->m_pos.y + 0.7f, rigidbodyAvatar->m_pos.z));
+    // get avatar
+    //b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();
+    //b3RigidBodyData *rigidbodyAvatar = &(pRigidBodies[m_rigidbodyAvatarId]);
+    //rigidbodyAvatar->m_quat = b3Quat(0,0,0);
+
+    //m_Camera.SetPos(glm::vec3(rigidbodyAvatar->m_pos.x, rigidbodyAvatar->m_pos.y + 0.7f, rigidbodyAvatar->m_pos.z));
     // move
     {
-        glm::vec3 dir(v3CameraDir); dir.y = 0.0f; dir = glm::normalize(dir);
+        glm::vec3 dir(v3CameraDir); //dir.y = 0.0f; dir = glm::normalize(dir);
         glm::vec3 newDir(0, 0, 0);
         float fMoveVelocity = 6.0f;
 
@@ -364,13 +398,16 @@ void MainWindow::TimerTick()
             newDir = normalize(newDir);
         }
 
-        glm::vec3 v3Velocity = newDir * fMoveVelocity;
-        v3Velocity.y = rigidbodyAvatar->m_linVel.y;
+        glm::vec3 v3Step = newDir * fMoveVelocity * dt;
+        m_Camera.SetPos(m_Camera.GetPos() + v3Step);
 
-        rigidbodyAvatar->m_linVel = b3MakeVector3(v3Velocity.x, v3Velocity.y, v3Velocity.z);
+        //glm::vec3 v3Velocity = newDir * fMoveVelocity;
+        //v3Velocity.y = rigidbodyAvatar->m_linVel.y;
+
+        //rigidbodyAvatar->m_linVel = b3MakeVector3(v3Velocity.x, v3Velocity.y, v3Velocity.z);
     }
 
-    m_np->writeAllBodiesToGpu();
+    //m_np->writeAllBodiesToGpu();
 
     glm::vec3 v3LightPos = glm::vec3(32.6785f, 85.7038f, -39.8369f);
     glm::vec3 v3LightAt = glm::vec3(0, 0, 0);
@@ -379,86 +416,6 @@ void MainWindow::TimerTick()
     glm::mat4 mLightWorld = glm::mat4(1.0f);
     glm::mat4 mLightView = glm::lookAtRH(v3LightPos, v3LightAt, glm::vec3(0, 1, 0));
     glm::mat4 mLightProj = glm::orthoRH(-30.0f,30.0f, -30.0f,30.0f, 1.0f, 200.0f);
-
-    //// Draw
-    //// draw to shadow texture
-    //glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    //GLenum arrDrawBuffers1[] = { GL_COLOR_ATTACHMENT0 };
-    //glDrawBuffers(1, arrDrawBuffers1);
-
-    //glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    //glViewport(0, 0, nShadowWidth, nShadowWidth);
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    //glUseProgram(m_programDrawToDepthTexture);
-
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matWorld"), 1, GL_FALSE, glm::value_ptr(mLightWorld));
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matView"), 1, GL_FALSE, glm::value_ptr(mLightView));
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDrawToDepthTexture, "matProj"), 1, GL_FALSE, glm::value_ptr(mLightProj));
-
-    //for(int i = 0; i < m_modelGround.count(); i++)
-    //{
-    //    m_modelGround.at(i)->Draw(m_programDrawToDepthTexture);
-    //}
-    //for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
-    //{
-    //    m_modelDestructiveObjects.at(i)->Draw(m_programDrawToDepthTexture);
-    //}
-    ////m_modelGround.Draw(m_programDrawToDepthTexture);
-    ////m_modelDestructiveObjects.Draw(m_programDrawToDepthTexture);
-
-    //glUseProgram(0);
-
-    //// draw to screen
-    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    //glDrawBuffers(1, arrDrawBuffers1);
-
-    //glm::mat4 mCameraWorld = glm::mat4(1.0f);
-    //glm::mat4 mCameraView = glm::lookAtRH(v3CameraPos, v3CameraAt, glm::vec3(0, 1, 0));
-    //glm::mat4 mCameraProj = glm::perspectiveRH(glm::radians(45.0f), (float)nWidth / (float)nHeight, 0.1f, 1000.0f);
-
-    //glClearColor(0.5f, 0.5f, 1.0f, 1.0f);
-    //glViewport(0, 0, nWidth, nHeight);
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    //glUseProgram(m_programDraw);
-
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraWorld"), 1, GL_FALSE, glm::value_ptr(mCameraWorld));
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraView"), 1, GL_FALSE, glm::value_ptr(mCameraView));
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matCameraProj"), 1, GL_FALSE, glm::value_ptr(mCameraProj));
-
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightWorld"), 1, GL_FALSE, glm::value_ptr(mLightWorld));
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightView"), 1, GL_FALSE, glm::value_ptr(mLightView));
-    //glUniformMatrix4fv(glGetUniformLocation(m_programDraw, "matLightProj"), 1, GL_FALSE, glm::value_ptr(mLightProj));
-
-    //glUniform3fv(glGetUniformLocation(m_programDraw, "lightDir"), 1, glm::value_ptr(v3LightDir));
-
-    //glUniform1i(glGetUniformLocation(m_programDraw, "g_DepthTexture"), 1);
-    //glActiveTexture(GL_TEXTURE1);
-    //glBindTexture(GL_TEXTURE_2D, depthTexture);
-
-    //for(int i = 0; i < m_modelGround.count(); i++)
-    //{
-    //    m_modelGround.at(i)->Draw(m_programDrawToDepthTexture);
-    //}
-    //for(int i = 0; i < m_modelDestructiveObjects.count(); i++)
-    //{
-    //    m_modelDestructiveObjects.at(i)->Draw(m_programDrawToDepthTexture);
-    //}
-    ////m_modelGround.Draw(m_programDraw);
-    ////m_modelDestructiveObjects.Draw(m_programDraw);
-
-
-    //glUseProgram(0);
-
-    //glMatrixMode(GL_PROJECTION);
-    //glLoadMatrixf(glm::value_ptr(mCameraProj));
-    //glMatrixMode(GL_MODELVIEW);
-    //glLoadMatrixf(glm::value_ptr(mCameraView * mCameraWorld));
-
-    //m_SkyBox.Draw(v3CameraPos, 300.0f);
-
-    //SwapBuffers(hDC);
 
     // draw
     // 1/2 - draw to shadow texture
@@ -478,25 +435,38 @@ void MainWindow::TimerTick()
     m_modelDraw.Draw(&m_shaderShadowMap);
     m_modelDraw.End(&m_shaderShadowMap);
 
-    //m_modelBox.Begin(&m_shaderShadowMap);
-    //for(int i = 0; i < m_listRigidBodies.count(); i++)
-    //{
-    //    btRigidBody *body = m_listRigidBodies.at(i);
-    //
-    //    btTransform trans = body->getWorldTransform();
-    //    btQuaternion quat = trans.getRotation();
-    //    float fAngle = quat.getAngle();
-    //    btVector3 axis = quat.getAxis();
-    //    btVector3 tr = trans.getOrigin();
-    //
-    //    glm::mat4 mWorld = glm::translate(glm::vec3(tr.x(), tr.y(), tr.z()) ) * glm::rotate(fAngle, glm::vec3(axis.x(), axis.y(), axis.z()));
-    //
-    //    m_shaderShadowMap.SetMatrix("matWorld", &mWorld);
-    //
-    //    m_shaderShadowMap.SetTexture("g_Texture", m_listRigidBodiesTextureId.at(i), 0);
-    //    m_modelBox.Draw(&m_shaderShadowMap);
-    //}
-    //m_modelBox.End(&m_shaderShadowMap);
+    {
+        b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();
+
+        m_dynamicmodel.Begin(&m_shaderShadowMap);
+        for (int j = 0; j < numTextures; j++)
+        {
+            m_shaderShadowMap.SetTexture("g_Texture", textures[j], 0);
+
+            for (int i = 0; i < m_listDynamicIds.size(); i++)
+            {
+                if (m_listRigidBodiesTextureId.at(i) != textures[j])
+                {
+                    continue;
+                }
+
+                int nRigidBodyId = m_listDynamicIds.at(i);
+                //b3RigidBodyData *pRigidBody = &(pRigidBodies[nRigidBodyId]);
+
+                //b3Vector3 tr = pRigidBody->m_pos;
+                //b3Quat quat = pRigidBody->m_quat;
+                b3Vector3 tr;
+                b3Quat quat;
+                m_np->getObjectTransformFromCpu(&tr.x, &quat.x, nRigidBodyId);
+
+                glm::mat4 mWorld = glm::translate(glm::vec3(tr.x, tr.y, tr.z) ) * glm::rotate(quat.getAngle(), glm::vec3(quat.getAxis().x, quat.getAxis().y, quat.getAxis().z));
+
+                m_shaderShadowMap.SetMatrix("matWorld", &mWorld);
+                m_dynamicmodel.Draw(&m_shaderShadowMap);
+            }
+        }
+        m_dynamicmodel.End(&m_shaderShadowMap);
+    }
 
     m_shaderShadowMap.End();
     m_RenderToShadowTexture.Unbind();
@@ -523,25 +493,38 @@ void MainWindow::TimerTick()
     m_modelDraw.Draw(&m_shaderDraw);
     m_modelDraw.End(&m_shaderDraw);
 
-    //m_modelBox.Begin(&m_shaderDraw);
-    //for(int i = 0; i < m_listRigidBodies.count(); i++)
-    //{
-    //    btRigidBody *body = m_listRigidBodies.at(i);
-    //
-    //    btTransform trans = body->getWorldTransform();
-    //    btQuaternion quat = trans.getRotation();
-    //    float fAngle = quat.getAngle();
-    //    btVector3 axis = quat.getAxis();
-    //    btVector3 tr = trans.getOrigin();
-    //
-    //    glm::mat4 mWorld = glm::translate(glm::vec3(tr.x(), tr.y(), tr.z()) ) * glm::rotate(fAngle, glm::vec3(axis.x(), axis.y(), axis.z()));
-    //
-    //    m_shaderDraw.SetMatrix("matWorld", &mWorld);
-    //
-    //    m_shaderDraw.SetTexture("g_Texture", m_listRigidBodiesTextureId.at(i), 0);
-    //    m_modelBox.Draw(&m_shaderDraw);
-    //}
-    //m_modelBox.End(&m_shaderDraw);
+    {
+        b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();
+
+        m_dynamicmodel.Begin(&m_shaderDraw);
+        for (int j = 0; j < numTextures; j++)
+        {
+            m_shaderDraw.SetTexture("g_Texture", textures[j], 0);
+
+            for (int i = 0; i < m_listDynamicIds.size(); i++)
+            {
+                if (m_listRigidBodiesTextureId.at(i) != textures[j])
+                {
+                    continue;
+                }
+
+                int nRigidBodyId = m_listDynamicIds.at(i);
+                b3RigidBodyData *pRigidBody = &(pRigidBodies[nRigidBodyId]);
+
+                //b3Vector3 tr = pRigidBody->m_pos;
+                //b3Quat quat = pRigidBody->m_quat;
+                b3Vector3 tr;
+                b3Quat quat;
+                m_np->getObjectTransformFromCpu(&tr.x, &quat.x, nRigidBodyId);
+
+                glm::mat4 mWorld = glm::translate(glm::vec3(tr.x, tr.y, tr.z) ) * glm::rotate(quat.getAngle(), glm::vec3(quat.getAxis().x, quat.getAxis().y, quat.getAxis().z));
+
+                m_shaderDraw.SetMatrix("matWorld", &mWorld);
+                m_dynamicmodel.Draw(&m_shaderDraw);
+            }
+        }
+        m_dynamicmodel.End(&m_shaderDraw);
+    }
 
     m_shaderDraw.DisableTexture(1);
     m_shaderDraw.End();

@@ -50,11 +50,20 @@ void Model::Load(std::string strDir, std::string strFilename, glm::mat4 matTrans
         {
             aiFace face = pMesh->mFaces[f];
 
+            if (3 != face.mNumIndices)
+            {
+                continue;
+            }
+
             for(int i = 0; i < 3; i++)
             {
                 aiVector3D v = pMesh->mVertices[ face.mIndices[i] ];
                 aiVector3D n = pMesh->mNormals[ face.mIndices[i] ];
-                aiVector3D t = pMesh->mTextureCoords[0][ face.mIndices[i] ];
+                aiVector3D t(0,0,0);
+                if (true == pMesh->HasTextureCoords(0))
+                {
+                    t = pMesh->mTextureCoords[0][ face.mIndices[i] ];
+                }
 
                 Vertex vertex;
                 vertex.v3Position = glm::vec3(matTransform * glm::vec4(v.x, v.y, v.z, 1.0f));

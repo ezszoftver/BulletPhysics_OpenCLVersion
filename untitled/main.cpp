@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
     MainWindow mainWindow;
 
     QPixmap pixmap(":/resources/SplashScreen.png");
-    QSplashScreen splash(pixmap);
+    QSplashScreen splash(pixmap, Qt::WindowStaysOnTopHint);
     splash.show();
 
     if (false == mainWindow.Init(splash))
