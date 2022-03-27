@@ -70,7 +70,8 @@ bool MainWindow::Init(QSplashScreen &splash)
     splash.update();
 
     showMaximized();
-    QApplication::setOverrideCursor(Qt::BlankCursor);
+    m_bMouseButtonDown = true;
+    ui->glWidget->setCursor(Qt::BlankCursor);
 
     m_elapsedTimer.start();
     m_nElapsedTime = m_nCurrentTime = m_elapsedTimer.nsecsElapsed();
@@ -86,7 +87,7 @@ MainWindow::~MainWindow()
     m_Timer.stop();
     disconnect(&m_Timer, SIGNAL(timeout()), this, SLOT(TimerTick()));
 
-    QApplication::setOverrideCursor(Qt::ArrowCursor);
+    ui->glWidget->setCursor(Qt::ArrowCursor);
 
     m_SkyBox.Release();
     for(int i = 0; i < m_modelGround.count(); i++)
@@ -204,15 +205,6 @@ bool MainWindow::InitScene()
     m_bp->writeAabbsToGpu();
 
     m_Camera.Init(glm::vec3(0,8,20), glm::vec3(0,0,0));
-
-    // openal
-    //ALuint buffer;
-    //buffer = alutCreateBufferFromFile("Music.wav");
-    //ALuint source;
-    //alGenSources(1, &source);
-    //alSourcei(source, AL_BUFFER, buffer);
-    //alSourcei(source, AL_LOOPING, true);
-    //alSourcePlay(source);
 
     return true;
 }
@@ -358,9 +350,12 @@ void MainWindow::TimerTick()
     m_np->readbackAllBodiesToCpu();
 
     // mouse rotate
-    QPoint pointDiff = cursor().pos() - QPoint(width() / 2, height() / 2);
-    cursor().setPos(QPoint(width() / 2, height() / 2));
-    m_Camera.Rotate(pointDiff.x(), pointDiff.y());
+    if (true == m_bMouseButtonDown)
+    {
+        QPoint pointDiff = cursor().pos() - QPoint(width() / 2, height() / 2);
+        cursor().setPos(QPoint(width() / 2, height() / 2));
+        m_Camera.Rotate(pointDiff.x(), pointDiff.y());
+    }
     m_Camera.Update(dt);
     glm::vec3 v3CameraPos = m_Camera.GetPos();
     glm::vec3 v3CameraAt = m_Camera.GetAt();
@@ -370,6 +365,10 @@ void MainWindow::TimerTick()
     b3RigidBodyData *pRigidBodies = (b3RigidBodyData*)m_np->getBodiesCpu();//getRigidBodyDataCpu();
     b3RigidBodyData *rigidbodyAvatar = &(pRigidBodies[m_rigidbodyAvatarId]);
     rigidbodyAvatar->m_quat = b3Quat(0,0,0);
+    // restitution, friction
+    rigidbodyAvatar->m_restituitionCoeff = 0.0f;
+    rigidbodyAvatar->m_frictionCoeff = 2.0f;
+
     m_Camera.SetPos(glm::vec3(rigidbodyAvatar->m_pos.x, rigidbodyAvatar->m_pos.y + 0.7f, rigidbodyAvatar->m_pos.z));
     // move
     {
@@ -400,10 +399,6 @@ void MainWindow::TimerTick()
 
         glm::vec3 v3Velocity = newDir * fMoveVelocity;
         v3Velocity.y = rigidbodyAvatar->m_linVel.y;
-
-        float fDamping = 0.9f;
-        v3Velocity.x *= fDamping;
-        v3Velocity.z *= fDamping;
 
         rigidbodyAvatar->m_linVel = b3MakeVector3(v3Velocity.x, v3Velocity.y, v3Velocity.z);
     }
@@ -522,7 +517,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
     if (Qt::Key_Escape == event->key())
     {
-        close();
+        m_bMouseButtonDown = false;
+        ui->glWidget->setCursor(Qt::ArrowCursor);
     }
 }
 
@@ -537,12 +533,14 @@ void MainWindow::keyReleaseEvent(QKeyEvent *event)
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
+    ui->glWidget->setCursor(Qt::BlankCursor);
+
     m_bMouseButtonDown = true;
 }
 
 void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 {
-    m_bMouseButtonDown = false;
+    //m_bMouseButtonDown = false;
 }
 
 void MainWindow::mouseMoveEvent(QMouseEvent *event)
