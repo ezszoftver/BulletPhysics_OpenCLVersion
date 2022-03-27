@@ -21,21 +21,21 @@ void main()
 		discard;
 	}
 
-	float ambientIntensity = 0.4f;
+	float ambientIntensity = 0.3f;
 	float diffuseIntensity = ambientIntensity;
 
 	vec3 depth = ((Depth.xyz / Depth.w) * 0.5f) + 0.5f; // [-1 .. 1] to [0 .. 1]
-	float pixelSize = 1.0f / 1024.0f;
+	float pixelSize = 1.0f / 2048.0f;
 	for(int i = -1; i <= 1; i++)
 	{
 		for(int j = -1; j <= 1; j++)
 		{
 			vec2 coord = depth.xy + vec2(pixelSize * i, pixelSize * j);
 			float depthLight = texture2D(g_DepthTexture, coord).x;
-			bool isShadow = ((depthLight + 0.0015f) < depth.z) ? true : false;
+			bool isShadow = ((depthLight + 0.00125f) < depth.z) ? true : false;
 			if (false == isShadow || depth.x <= 0.0f || depth.x >= 1.0f || depth.y <= 0.0f || depth.y >= 1.0f)
 			{
-				diffuseIntensity += dot(Normal, -lightDir) / 9.0f;
+				diffuseIntensity += max(dot(Normal, -lightDir), 0.0f) / 9.0f;
 			}
 		}
 	}
