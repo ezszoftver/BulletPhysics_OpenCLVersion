@@ -417,6 +417,7 @@ void b3GpuPgsContactSolver::solveContactConstraint(const b3OpenCLArray<b3RigidBo
 				}
 			}
 
+            clFlush(m_data->m_queue);
 			clFinish(m_data->m_queue);
 		}
 
@@ -697,7 +698,8 @@ void b3GpuPgsContactSolver::solveContacts(int numBodies, cl_mem bodyBuf, cl_mem 
 				m_data->m_solverGPU->m_contactBuffer2->resize(nContacts);
 			}
 
-			//clFinish(m_data->m_queue);
+            clFlush(m_data->m_queue);
+            clFinish(m_data->m_queue);
 
 			{
 				B3_PROFILE("batching");
@@ -877,7 +879,8 @@ void b3GpuPgsContactSolver::solveContacts(int numBodies, cl_mem bodyBuf, cl_mem 
 					}
 				}
 
-				//clFinish(m_data->m_queue);
+                clFlush(m_data->m_queue);
+                clFinish(m_data->m_queue);
 
 				//				{
 				//				b3AlignedObjectArray<unsigned int> histogram;
@@ -922,6 +925,7 @@ void b3GpuPgsContactSolver::solveContacts(int numBodies, cl_mem bodyBuf, cl_mem 
 						B3_PROFILE("gpu batchContacts");
 						maxNumBatches = 250;  //250;
 						m_data->m_solverGPU->batchContacts(m_data->m_pBufContactOutGPU, nContacts, m_data->m_solverGPU->m_numConstraints, m_data->m_solverGPU->m_offsets, csCfg.m_staticIdx);
+                        clFlush(m_data->m_queue);
 						clFinish(m_data->m_queue);
 					}
 					else
@@ -1041,6 +1045,7 @@ void b3GpuPgsContactSolver::solveContacts(int numBodies, cl_mem bodyBuf, cl_mem 
 													  contactConstraintOut,
 													  additionalData, nContacts,
 													  (b3SolverBase::ConstraintCfg&)csCfg);
+            clFlush(m_data->m_queue);
 			clFinish(m_data->m_queue);
 		}
 

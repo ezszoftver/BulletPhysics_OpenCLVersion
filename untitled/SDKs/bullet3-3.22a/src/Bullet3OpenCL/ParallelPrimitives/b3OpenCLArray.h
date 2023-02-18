@@ -227,6 +227,8 @@ public:
 									 srcOffsetBytes, dstOffsetInBytes, sizeof(T) * numElements, 0, 0, 0);
 
 		b3Assert(status == CL_SUCCESS);
+        clFlush(m_commandQueue);
+        clFinish(m_commandQueue);
 	}
 
 	void copyFromHost(const b3AlignedObjectArray<T>& srcArray, bool waitForCompletion = true)
@@ -250,8 +252,9 @@ public:
 			status = clEnqueueWriteBuffer(m_commandQueue, m_clBuffer, 0, sizeof(T) * destFirstElem, sizeInBytes,
 										  src, 0, 0, 0);
 			b3Assert(status == CL_SUCCESS);
-			if (waitForCompletion)
-				clFinish(m_commandQueue);
+            //if (waitForCompletion)
+            clFlush(m_commandQueue);
+            clFinish(m_commandQueue);
 		}
 		else
 		{
@@ -277,8 +280,9 @@ public:
 										 destPtr, 0, 0, 0);
 			b3Assert(status == CL_SUCCESS);
 
-			if (waitForCompletion)
-				clFinish(m_commandQueue);
+            //if (waitForCompletion)
+            clFlush(m_commandQueue);
+            clFinish(m_commandQueue);
 		}
 		else
 		{

@@ -87,6 +87,7 @@ void b3PrefixScanCL::execute(b3OpenCLArray<unsigned int>& src, b3OpenCLArray<uns
 
 	if (sum)
 	{
+        clFlush(m_commandQueue);
 		clFinish(m_commandQueue);
 		dstNative->copyToHostPointer(sum, 1, n - 1, true);
 	}

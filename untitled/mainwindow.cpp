@@ -142,7 +142,7 @@ bool MainWindow::InitScene(QSplashScreen &splash)
     glEnable(GL_TEXTURE_2D);
     //glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    wglSwapIntervalEXT(0);
+    wglSwapIntervalEXT(1);
 
     m_shaderDraw.Load("Shaders/Draw.vs.txt", "Shaders/Draw.fs.txt");
     m_shaderShadowMap.Load("Shaders/DrawToDepthTexture.vs.txt", "Shaders/DrawToDepthTexture.fs.txt");
@@ -174,13 +174,13 @@ bool MainWindow::InitScene(QSplashScreen &splash)
         textures[i] = texture.ID();
     }
 
-    int max = 2500;
+    int max = 10000;
     int curr = 0;
     for(int x = -5; x < 5; x++)
     {
         for(int z = -5; z < 5; z++)
         {
-            for(int y = 0; y < (1/*100db*/ * 25/*2500db*/); y++)
+            for(int y = 0; y < (1/*100db*/ * 100/*10000db*/); y++)
             {
                 float fScale = 1.5f;
                 int dynamic_id = CreateConvexMesh(glm::vec3(x * fScale, 20 + (y * fScale), z * fScale), glm::vec3(0,0,0), 10.0f, m_dynamicmodel.GetVertices());
@@ -203,25 +203,30 @@ bool MainWindow::InitScene(QSplashScreen &splash)
     m_np->writeAllBodiesToGpu();
     m_bp->writeAabbsToGpu();
 
-    m_Camera.Init(glm::vec3(20,3,20), glm::vec3(0,0,0));
+    m_Camera.Init(glm::vec3(20,15,20), glm::vec3(0,0,0));
 
     return true;
 }
 
 int MainWindow::CreateConvexMesh(glm::vec3 v3Position, glm::vec3 v3Rotate, float fMass, std::vector< Vertex > *pListVertices)
 {
-    std::vector<b3Vector3> vertices;
-
-    for(int i = 0; i < (int)pListVertices->size(); i++)
+    static int colIndex = -1;
+    if (-1 == colIndex)
     {
-        Vertex vertex = pListVertices->at(i);
+        std::vector<b3Vector3> vertices;
 
-        glm::vec3 pos = vertex.v3Position;
-        vertices.push_back(b3MakeVector3(pos.x, pos.y, pos.z));
+        for(int i = 0; i < (int)pListVertices->size(); i++)
+        {
+            Vertex vertex = pListVertices->at(i);
+
+            glm::vec3 pos = vertex.v3Position;
+            vertices.push_back(b3MakeVector3(pos.x, pos.y, pos.z));
+        }
+
+        b3Vector3 scaling = b3MakeVector3(1.0f, 1.0f, 1.0f);
+
+        colIndex = m_np->registerConvexHullShape( (float*)vertices.data() , 3 * sizeof(float), vertices.size(), scaling);
     }
-
-    b3Vector3 scaling = b3MakeVector3(1.0f, 1.0f, 1.0f);
-    int colIndex = m_np->registerConvexHullShape( (float*)vertices.data() , 3 * sizeof(float), vertices.size(), scaling);
 
     b3Vector3 position = b3MakeVector3(v3Position.x, v3Position.y, v3Position.z);
     b3Quaternion orn(v3Rotate.x, v3Rotate.y, v3Rotate.z);
@@ -264,11 +269,12 @@ bool MainWindow::InitPhysics()
         return false;
     }
 
-    m_config.m_maxConvexBodies = 100000;
+    m_config.m_maxConvexBodies = 65535;
     m_config.m_maxConvexShapes = m_config.m_maxConvexBodies;
     int maxPairsPerBody = 8;
     m_config.m_maxBroadphasePairs = maxPairsPerBody * m_config.m_maxConvexBodies;
     m_config.m_maxContactCapacity = m_config.m_maxBroadphasePairs;
+    m_config.m_maxTriConvexPairCapacity = 128 * 1024;
 
     m_np = new b3GpuNarrowPhase(m_clContext, m_clDevice, m_clQueue, m_config);
     m_bp = new b3GpuSapBroadphase(m_clContext, m_clDevice, m_clQueue);
@@ -328,8 +334,8 @@ void MainWindow::TimerTick()
     m_nCurrentTime = m_elapsedTimer.nsecsElapsed();
     dt = (float)(m_nCurrentTime - m_nElapsedTime) / 1000000000.0f;
 
-    if (dt <= 0.0) { return; }
-    if (dt > (1.0f / 30.0f)){ dt = 1.0f / 30.0f; }
+    if (dt <= 0.0) { dt = 1.0f / 60.0f; }
+    //if (dt > (1.0f / 60.0f)){ dt = 1.0f / 60.0f; }
 
     // print fps
     nFPS++;
@@ -348,7 +354,10 @@ void MainWindow::TimerTick()
     if (nHeight < 1) { nHeight = 1; }
 
     // physics
-    m_rigidBodyPipeline->stepSimulation(dt);
+    float dt2 = dt;
+    if (dt2 > (1.0f / 60.0f)){ dt2 = 1.0f / 60.0f; }
+    m_rigidBodyPipeline->stepSimulation(dt2);
+    Sleep(10);
 
     m_np->readbackAllBodiesToCpu();
 

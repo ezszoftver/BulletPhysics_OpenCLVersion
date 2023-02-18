@@ -185,6 +185,7 @@ int b3GpuNarrowPhase::registerSphereShape(float radius)
 
 		m_data->m_localShapeAABBCPU->push_back(aabb);
 		//		m_data->m_localShapeAABBGPU->push_back(aabb);
+        clFlush(m_queue);
 		clFinish(m_queue);
 	}
 
@@ -225,6 +226,7 @@ int b3GpuNarrowPhase::registerPlaneShape(const b3Vector3& planeNormal, float pla
 
 		m_data->m_localShapeAABBCPU->push_back(aabb);
 		//		m_data->m_localShapeAABBGPU->push_back(aabb);
+        clFlush(m_queue);
 		clFinish(m_queue);
 	}
 
@@ -514,6 +516,7 @@ int b3GpuNarrowPhase::registerCompoundShape(b3AlignedObjectArray<b3GpuChildShape
 	}
 
 	//	m_data->m_localShapeAABBGPU->push_back(aabbWS);
+    clFlush(m_queue);
 	clFinish(m_queue);
 	return collidableIndex;
 }

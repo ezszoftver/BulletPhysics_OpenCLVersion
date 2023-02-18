@@ -816,6 +816,7 @@ void b3Solver::solveContactConstraint(const b3OpenCLArray<b3RigidBodyData>* body
 				}
 			}
 
+            clFlush(m_queue);
 			clFinish(m_queue);
 		}
 

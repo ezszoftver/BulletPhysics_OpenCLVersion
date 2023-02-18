@@ -94,15 +94,15 @@ public:
 		b3Assert(status == CL_SUCCESS);
 	}
 
-	inline void launch1D(int numThreads, int localSize = 64)
+    inline void launch1D(int numThreads, int localSize = 64)
 	{
 		launch2D(numThreads, 1, localSize, 1);
 	}
 
 	inline void launch2D(int numThreadsX, int numThreadsY, int localSizeX, int localSizeY)
 	{
-		size_t gRange[3] = {1, 1, 1};
-		size_t lRange[3] = {1, 1, 1};
+        size_t gRange[2] = {1, 1};
+        size_t lRange[2] = {1, 1};
 		lRange[0] = localSizeX;
 		lRange[1] = localSizeY;
 		gRange[0] = b3Max((size_t)1, (numThreadsX / lRange[0]) + (!(numThreadsX % lRange[0]) ? 0 : 1));
@@ -110,13 +110,15 @@ public:
 		gRange[1] = b3Max((size_t)1, (numThreadsY / lRange[1]) + (!(numThreadsY % lRange[1]) ? 0 : 1));
 		gRange[1] *= lRange[1];
 
-		cl_int status = clEnqueueNDRangeKernel(m_commandQueue,
-											   m_kernel, 2, NULL, gRange, lRange, 0, 0, 0);
+        cl_int status = clEnqueueNDRangeKernel(m_commandQueue, m_kernel, 2, NULL, gRange, lRange, 0, 0, 0);
 		if (status != CL_SUCCESS)
 		{
 			printf("Error: OpenCL status = %d\n", status);
 		}
 		b3Assert(status == CL_SUCCESS);
+
+        clFlush(m_commandQueue);
+        clFinish(m_commandQueue);
 	}
 
 	void enableSerialization(bool serialize)

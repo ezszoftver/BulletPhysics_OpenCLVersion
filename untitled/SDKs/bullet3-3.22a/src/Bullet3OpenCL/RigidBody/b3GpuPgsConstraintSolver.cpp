@@ -771,6 +771,7 @@ b3Scalar b3GpuPgsConstraintSolver::solveGroupCacheFriendlyIterations(b3OpenCLArr
 			}
 		}
 	}
+    clFlush(m_gpuData->m_queue);
 	clFinish(m_gpuData->m_queue);
 	return 0.f;
 }
@@ -1056,6 +1057,7 @@ b3Scalar b3GpuPgsConstraintSolver::solveGroupCacheFriendlyFinish(b3OpenCLArray<b
 		}
 	}
 
+    clFlush(m_gpuData->m_queue);
 	clFinish(m_gpuData->m_queue);
 
 	m_tmpSolverContactConstraintPool.resizeNoInitialize(0);

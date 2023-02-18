@@ -199,6 +199,7 @@ int b3LauncherCL::validateResults(unsigned char* goldBuffer, int goldBufferCapac
 			status = clEnqueueReadBuffer(m_commandQueue, m_kernelArguments[ii].m_clBuffer, CL_TRUE, 0, m_kernelArguments[ii].m_argSizeInBytes,
 										 memBuf, 0, 0, 0);
 			b3Assert(status == CL_SUCCESS);
+            clFlush(m_commandQueue);
 			clFinish(m_commandQueue);
 
 			for (int b = 0; b < m_kernelArguments[ii].m_argSizeInBytes; b++)
@@ -261,6 +262,7 @@ int b3LauncherCL::serializeArguments(unsigned char* destBuffer, int destBufferCa
 			status = clEnqueueReadBuffer(m_commandQueue, arg->m_clBuffer, 0, 0, arg->m_argSizeInBytes,
 										 &destBuffer[curBufferSize], 0, 0, 0);
 			b3Assert(status == CL_SUCCESS);
+            clFlush(m_commandQueue);
 			clFinish(m_commandQueue);
 			curBufferSize += arg->m_argSizeInBytes;
 		}

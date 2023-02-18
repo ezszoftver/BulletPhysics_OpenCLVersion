@@ -698,7 +698,7 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 INCLUDEPATH += $$PWD/SDKs/bullet3-3.22a/src
 DEPENDPATH += $$PWD/SDKs/bullet3-3.22a/src
-DEFINES += BT_THREADSAFE=1 B3_USE_CLEW B3_USE_SSE B3_USE_SSE_IN_API
+DEFINES += BT_THREADSAFE=1 B3_USE_CLEW BT_USE_SSE BT_USE_SSE_IN_API
 
 win32: LIBS += -L$$PWD/SDKs/Assimp/lib/ -lassimp -lIrrXML -lzlib
 INCLUDEPATH += $$PWD/SDKs/Assimp/include

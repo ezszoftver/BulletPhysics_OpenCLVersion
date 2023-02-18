@@ -2808,6 +2808,7 @@ void GpuSatCollision::computeConvexConvexContactsGPUSAT(b3OpenCLArray<b3Int4>* p
 	int numConcavePairs = 0;
 
 	{
+        clFlush(m_queue);
 		clFinish(m_queue);
 		if (findSeparatingAxisOnGpu)
 		{
